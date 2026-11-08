@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use these programs in published work, please cite the book they were written for."
+type: software
+title: "Sink Scout: sink_scout, county_scan and field_kit"
+abstract: "Finds collapse-sinkhole candidates in bare-earth lidar: pits on drainages, linked into chains down their washes, ranked by how much they look like the ground over a piping cave."
+authors:
+  - family-names: Branham
+    given-names: Kase
+repository-code: "https://github.com/kase1111-hash/Sink_Scout"
+license: CC0-1.0
+keywords:
+  - lidar
+  - sinkholes
+  - pseudokarst
+  - piping caves
+  - digital elevation models
+preferred-citation:
+  type: book
+  title: "Hollowed Ground: The Piping Caves of Colorado's Western Slope"
+  authors:
+    - family-names: Branham
+      given-names: Kase
+  year: 2026
