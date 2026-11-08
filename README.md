@@ -4,7 +4,7 @@
 
 Written for the book *Hollowed Ground: The Piping Caves of Colorado's Western Slope* (Kase Branham, 2026). The book's Appendix A, [included here](Appendix_A_Running_Sink_Scout.md), is the beginner's path from nothing to a first result. This file is the reference: every setting and every file the programs write. When the programs change, it changes with them; [CHANGELOG.md](CHANGELOG.md) says what changed.
 
-**The outputs of these programs are maps of places where the ground is hollow. Do not publish them.** The one exception is `county_density_nocoords.png`, which shows only counts per two-kilometer square. Figures for publication are made with `--no-coords`. Report what you find to the people who keep the records (in the US, the local NSS grotto) and keep the locations among them. More under [The rule](#the-rule).
+**The outputs of these programs are maps of places where the ground is hollow. Do not publish them.** The exceptions are `county_density_nocoords.png`, which shows only counts per two-kilometer square, and field_kit's chain profiles, which show only relative heights. Figures for publication are made with `--no-coords`. Report what you find to the people who keep the records (in the US, the local NSS grotto) and keep the locations among them. More under [The rule](#the-rule).
 
 ## The three programs
 
@@ -60,7 +60,7 @@ Everything these programs write is a map of places where the ground is hollow, a
 - A `--check` or `--bbox` value in a question or a bug report. [CONTRIBUTING.md](CONTRIBUTING.md) says how to report a problem without one.
 - A file or folder named after a place.
 
-**Never commit run outputs.** The [.gitignore](.gitignore) keeps out the usual output folders (`county/`, `field/`, `field_*/`, `check_*/`, `runs/`, `selftest/`, `*_out/`, `*_1m/`), anything with `PRIVATE` in its name, elevation data, `ground_truth*.csv`, and every `.kml`, `.kmz` and `.gpx`. Run folders named any other way are not covered: keep them outside the repository.
+**Never commit run outputs.** The [.gitignore](.gitignore) keeps out the usual output folders (`county/`, `field/`, `field_*/`, `check_*/`, `runs/`, `selftest/`, `*_out/`, `*_1m/`, and the `*_refine_*/` folders the refine commands write), anything with `PRIVATE` in its name, elevation data, `ground_truth*.csv`, and every `.kml`, `.kmz` and `.gpx`. Run folders named any other way are not covered: keep them outside the repository.
 
 Walk the candidates, report what you find to the people who keep the records, and do not publish locations.
 
@@ -145,7 +145,7 @@ Results by cell size in the book's tests:
 - **2 m:** nearly as good; 38 of the top 40 on one hillside were pits in imagery.
 - **4 m:** about half right, because small pits and ponds merge.
 
-**Coarse then fine.** Sweep a block at `--agg 3` or `--agg 4` to find fields and long chains. The sweep writes `refine_commands.txt`, one full-resolution `--bbox` run per chain and per top candidate (`--refine-top`, default 15). Refine boxes extend `--refine-margin` (default 300 m) beyond the pits. Each line carries the sweep's DEM files, `--crs`, `--min-ratio` and road options; add any other options by hand.
+**Coarse then fine.** Sweep a block at `--agg 3` or `--agg 4` to find fields and long chains. The sweep writes `refine_commands.txt`, one full-resolution `--bbox` run per chain and per top candidate (`--refine-top`, default 15). Refine boxes extend `--refine-margin` (default 300 m) beyond the pits. Each line carries the sweep's DEM files, `--crs`, `--min-ratio` and road options, adds `--thumbs 20` (and, for a single pit, a `--check` on it), and writes to `<out>_refine_chain<N>` or `<out>_refine_rank<N>`. Add any other options by hand, including `--z-units m` if you overrode the Mesa default.
 
 Catchment, the on-channel test, the creek flag, and chains are all measured inside the box. A pit on a wash that drains a square mile reports a few acres from a 600-m box (one known cave: 258 ac on the full mosaic, 6 ac in its box). When the verdict depends on the wash above, use `--refine-margin 1000`.
 
@@ -169,7 +169,7 @@ Catchment, the on-channel test, the creek flag, and chains are all measured insi
    - Below 0.5 the pit is flagged `thin-dam`, its score multiplied by 0.4, and it is excluded from chains.
    - The test is skipped on cells coarser than 2.7 m.
    - It catches fallen trees across ravines, fence lines and thin berms.
-6. **Chains.** From each pit's spill point the flow path is traced downstream. If it reaches another pit within `--chain-dist` along the path, the two are linked. Each pit links to at most one pit below it, so the links form trees; the longest path from a top pit to the bottom pit is the chain's stem. Each chain is drawn from the top pit's floor through every member's floor to the root. A pit joins a chain only if its depth/width is at least `--chain-ratio`, its catchment is at most `--max-catch-ha`, and it is not flagged `road` or `thin-dam`.
+6. **Chains.** From each pit's floor the flow path is traced downstream, out over its spill point and down the wash. If it passes within about 10 m of another pit's footprint within `--chain-dist` of path, the two are linked. Each pit links to at most one pit below it, so the links form trees; the longest path from a top pit to the bottom pit is the chain's stem. Each chain is drawn from the top pit's floor through the floor of every pit on the stem to the root. A pit joins a chain only if its depth/width is at least `--chain-ratio`, its catchment is at most `--max-catch-ha`, and it is not flagged `road` or `thin-dam`.
 7. **Score.** Shape, depth, log catchment and the chain bonus add; elongation subtracts; each flag multiplies the score down. Candidates are ranked by score.
 
 ### The score
@@ -246,13 +246,15 @@ A candidate with no flags, a depth near half its width, and a few to a few dozen
 
 | Option | Default | Meaning |
 |---|---|---|
-| `--osm-roads` | off | Downloads OpenStreetMap roads and tracks for the footprint and flags culvert dams. Cached as `osm_roads.geojson` in the output folder and reused |
+| `--osm-roads` | off | Downloads OpenStreetMap roads and tracks for the footprint and flags culvert dams. Cached as `osm_roads.geojson` in the output folder and reused, even if the box has changed: delete it, or use a new `--out`, when it has |
 | `--roads file.shp` | none | Uses a local road layer (lines or polygons, shapefile or GeoJSON) instead of, or as well as, OpenStreetMap |
 | `--road-buffer` | 30 m | Distance from a road that flags `road` and keeps a pit out of chains |
 | `--geology geol.shp` | none | Geologic map polygons (shapefile or GeoJSON) |
 | `--geo-field` | `UNIT` | Attribute holding the unit code |
 | `--geo-units TRc,Jm` | every polygon | Units to favor, comma-separated; case is ignored |
 | `--geo-buffer` | 300 m | Distance from those units that still counts as on them; farther is flagged `off-geology` |
+
+Road and geology files in GeoJSON are read as longitude/latitude. A shapefile is read in the CRS of its `.prj`, or, without one, taken to be in the DEM's CRS.
 
 **Outputs**
 
@@ -274,7 +276,7 @@ A candidate with no flags, a depth near half its width, and a few to a few dozen
 | `--selftest` | off | Builds the synthetic landscape described under [Self-test](#self-test) and runs on it |
 
 Notes on the options:
-- `--chain-ratio` is set below `--min-ratio` so that a partly collapsed slot still links to the pit beside it.
+- `--chain-ratio` (0.1) sits below the `--min-ratio` county_scan passes (0.2), so in a county run a partly collapsed slot flagged shallow/wide still links to the pit beside it. At sink_scout's own default of 0.05 the order is reversed: a pit with depth/width between 0.05 and 0.1 is neither flagged nor able to join a chain.
 - `--chain-dist`: a test at 300 m on a known pit field linked nothing new, so keep 200.
 - A coordinate that begins with a minus sign (a southern latitude) must be joined to its option with `=`: `--bbox=-33.91,151.20,-33.90,151.22`.
 
@@ -284,7 +286,7 @@ All in `--out`.
 
 | File | Contents |
 |---|---|
-| `candidates.csv` | One row per pit, best first, with every measurement in meters and feet, plus `flags`, `chain_id`, `depth_open_ft` and `dam_frac`. [Columns](#candidatescsv). |
+| `candidates.csv` | One row per pit, best first: depth and diameter in meters and feet, catchment in hectares and acres, the other measurements in meters, plus `flags`, `chain_id`, `depth_open_ft` and `dam_frac`. [Columns](#candidatescsv). |
 | `candidates.geojson` | The same data in longitude/latitude: a point at each pit's deepest cell and a polygon for its footprint. For GIS. |
 | `candidates.kml` | The same for Google Earth: a pin per pit named by rank, with its measurements, and its outline. Red for ranks 1–10, orange to 30, yellow below. |
 | `candidates.shp`, `depressions.shp` | Points at the deepest cell and footprint polygons, in the DEM's CRS, with `.shx`, `.dbf` and `.prj`. For GIS. Field names are cut to 10 characters. |
@@ -307,7 +309,7 @@ Timestamped progress (the DEM's size, cell size, share of valid cells, elevation
 
     python county_scan.py tiles --out county --dry-run
     python county_scan.py tiles --out county --agg 1 --split 3 --osm-roads
-    python county_scan.py tiles --out county --agg 1 --split 3 --merge-only        # rebuild the lists only
+    python county_scan.py tiles --out county --agg 1 --split 3 --merge-only        # rebuild the county files and maps from finished runs
 
 `--dry-run` prints the plan, the memory per run and the expected time, and runs nothing.
 
@@ -315,10 +317,10 @@ The folder holds USGS 1-m tiles under the names The National Map gives them (`US
 
 **How tiles are run:**
 - Each tile (or each of its `--split` N×N pieces) is run with a 500-m buffer of same-project ground.
-- A candidate is kept only if its center falls in the tile's core. Cores follow the nominal 10-km grid, because USGS tiles overlap their neighbors by about 6 m.
+- A candidate is kept only if its deepest cell falls in the tile's core. Cores follow the nominal 10-km grid, because USGS tiles overlap their neighbors by about 6 m.
 - At 1 m, `--split 3` uses about 4 GB per run. A 100-tile county takes most of a day.
 - Runs are resumable. A finished piece is rerun automatically if its source tiles change (a neighbor added) or if `--agg` changes.
-- Across runs from different pieces, candidates less than 6 m apart are merged into one. This handles UTM-zone project overlap.
+- Across runs from different pieces, candidates less than 6 m apart are merged into one, keeping the higher score, and chains whose top pits are less than 6 m apart are kept once. This handles UTM-zone project overlap.
 
 Each run is one `sink_scout.py` command: the piece and its buffer as a `--bbox`, `--agg`, `--min-ratio`, `--max-catch-ha`, `--thumbs 0 --no-overview`, the tile's roads, and anything in `--extra`. Its command line and everything it prints go to `runs/<piece>/run.log`; a `DONE` file marks it finished. Only the tile set and `--agg` are compared when deciding whether to rerun. After changing `--extra`, `--min-ratio`, `--max-catch-ha` or the roads, delete `runs/` (or the `DONE` files) to redo the runs. Settings that only affect the merge (the `--top` limits, `--keep-shallow`) need only `--merge-only`.
 
@@ -356,7 +358,7 @@ County ranks are by score within each layer. `field_kit.py` uses the same ids.
 | `--osm-roads` | off | Fetch OpenStreetMap roads once per tile and use them in every run |
 | `--min-ratio` | 0.2 | Passed to each run |
 | `--max-catch-ha` | 300 ha | Passed to each run |
-| `--extra "..."` | none | More sink_scout options, quoted: `--extra "--min-depth 2"`. Split on spaces, so paths in it cannot contain spaces |
+| `--extra "..."` | none | More sink_scout options, quoted: `--extra "--min-depth 2"`. A lone option with no value needs `=`: `--extra=--keep-edge`. Split on spaces, so paths in it cannot contain spaces |
 | `--top N` | 0 (all) | Pits on washes kept per tile |
 | `--top-offchannel N` | 0 (all) | Off-channel pits kept per tile |
 | `--top-bigwash N` | 0 (all) | Big-wash pits kept per tile |
@@ -381,10 +383,10 @@ The plan printed at the start of every run, dry or not, warns when the largest r
 | `runs/<tile>/` or `runs/<tile>_r<i>c<j>/` | One sink_scout run per tile or piece, as listed under [sink_scout outputs](#outputs) but without the overview and close-ups, plus `run.log` and `DONE` |
 | `roads/<tile>.geojson` | With `--osm-roads`: roads for the tile and its buffer |
 | `county_candidates.geojson` | Kept candidates as points and footprints, in longitude/latitude, with every sink_scout field (except `label`, `parent`, `x`, `y`) plus `tile`, `piece`, `layer`, `run_rank` and `county_rank` |
-| `county_candidates.csv` | The same table without shapes. [Columns](#county_candidatescsv) |
+| `county_candidates.csv` | The main fields of the same list, without shapes. [Columns](#county_candidatescsv) |
 | `county_candidates.kml` | Google Earth: a folder per layer, pins named by id and colored orange to yellow by score, and a folder of chains |
 | `county_chains.geojson` | Chains whose top pit lies in a run's core, with `tile` and `piece` |
-| `county_overview.png` | Hillshade of the whole area with every kept pit, off-channel and big-wash candidate, and chain; the top 100 pits numbered. Private |
+| `county_overview.png` | Hillshade of the whole area with every kept pit, off-channel and big-wash candidate (not the shallow layer), and chain; the top 100 pits numbered. Private |
 | `county_density_nocoords.png` | Pits on washes and on big washes per two-kilometer square over the hillshade, with a 10-km scale bar and no coordinates. Publishable |
 | `county_summary.txt` | Per tile: runs finished, candidates found, how many fell inside the core, and how many were kept of those available in each layer |
 
@@ -410,13 +412,13 @@ The list can be a county list or one sink_scout run's `candidates.geojson` (with
 | `--out DIR` | `field` | Output folder |
 | `--crs CRS` | from the tiles | CRS override for tiles with bad metadata (`mesa`) |
 | `--layers` | `pits,offchannel,bigwash` | Layers to include. Add `shallow` for a county run with `--keep-shallow`. Verdicts are matched only against the layers included |
-| `--sheets` | none | Field sheets: `top25` (the first 25 pits on washes), a chain (`C3`: its members in the list), or ids (`P31,P36,O4`), comma-separated. Quote single-run ids, since a shell reads `#` as a comment: `--sheets "#3,#7"` |
+| `--sheets` | none | Field sheets: `top25` or any `topN` (the first N pits on washes), a chain (`C3`: its members in the list), or ids (`P31,P36,O4`), comma-separated. Quote single-run ids, since a shell reads `#` as a comment: `--sheets "#3,#7"` |
 | `--truth FILE` | none | CSV of verdicts: lat, lon, verdict, and optionally name, notes, date |
 | `--match-m` | 40 m | How close a verdict must be to a candidate |
 | `--tag NAME=FILE:FIELD` | none | Label each candidate by the polygon it falls in; repeatable |
 | `--closeup-m` | 300 m | Width of the close-up |
 | `--zoom-m` | 60 m | Width of the zoom panel |
-| `--no-closeups` | off | Skip the close-ups: fast, and a KMZ without pictures |
+| `--no-closeups` | off | Skip the close-ups: fast, and a KMZ with no close-ups (chain profiles are still drawn) |
 
 The z unit is auto-detected: if the tiles' elevations are about 3.28 times the list's, they are feet and are converted.
 
@@ -450,11 +452,11 @@ Bare-earth models smooth boulders away; a talus pit shows as one hollow with man
 | green | a pipe: verdict `pipe`, `known`, `walked`, `surveyed` or `cave` |
 | blue-green | another real hole: `talus`, `mine`, `shaft`, `cellar`, `arch`, `alcove`, `slot`, `plunge`, `pothole` or `sinkhole` |
 | red | not a hole: `pond`, `reservoir`, `culvert`, `road`, `logs`, `log`, `dam`, `artifact`, `building`, `none` or `nothing` |
-| orange to yellow | no verdict yet; yellow is the highest score in its layer |
+| orange to yellow | no verdict yet, or one that is not counted (such as `unknown`); yellow is the highest score in its layer |
 
 **Google Earth on the web** cannot show pictures packed inside a KMZ ("Only external images are currently supported"), and hosting the close-ups online would publish the locations. Use the .kmz in Google Earth Pro (desktop) for the pictures; `field_candidates_web.kml` gives the web version the pins without them.
 
-**Chain profiles** show the ground down the wash, the pit floors, the dashed line joining them, and, shaded between pits, the ground above that line, labeled with its least and median height. Distance is feet along the wash from the top pit; height is feet below the top pit's rim. These show relative heights only, so they are publishable. The shading is not roof thickness, and the profile is not a survey. Members are read from `county/runs/<piece>/candidates.geojson`; pits the county list dropped are labeled `r12` and drawn in grey.
+**Chain profiles** show the ground down the wash, the pit floors, the dashed line joining them, and, shaded between pits, the ground above that line, labeled with its least and median height. Distance is feet along the wash from the top pit; height is feet below the top pit's rim. These show relative heights only, so they are publishable. The shading is not roof thickness, and the profile is not a survey. Members are read from `county/runs/<piece>/candidates.geojson`; pits the county list dropped are labeled by their run rank, `r12`, in grey.
 
 **Field sheets** carry a PRIVATE banner and, for each pit: id, layer and rank; the 300-m close-up and a 60-m zoom; latitude and longitude, and grid coordinates in the tile's CRS; floor and rim elevations, depth, width, depth/width, catchment, depth without thin ridges, chain, distance to the nearest road or track (straight line), tags, flags, the boulder-pit note, and any verdict; the chain profile when the pit is on one; and the field checks from the book's safety chapter with boxes to tick.
 
@@ -589,7 +591,7 @@ The same fields are in `candidates.geojson`, `candidates.kml` (in part), `offcha
 - **"argument --bbox: expected one argument".** A value that begins with a minus sign needs `=`: `--bbox=-33.91,151.20,-33.90,151.22`.
 - **county_scan finds no tiles.** Tile names must contain `x<col>y<row>_` and end in `.tif`, as USGS names them.
 - **"field_kit.py needs sink_scout.py in the same folder".** Keep the three programs together.
-- **A close-up says "no elevation data here".** The `--tiles` folder does not hold the ground under that candidate.
+- **A candidate has no close-up, or a field sheet says "no elevation data here".** The `--tiles` folder does not hold the ground under that candidate; its `closeup` column is empty and its balloon has no picture.
 - **No pictures in Google Earth on the web.** Expected: open the .kmz in Google Earth Pro, or use `field_candidates_web.kml` without them.
 - **A thin-dam test "skipped" message.** The cells are coarser than `--dam-width` ÷ 1.5 (2.7 m at the default); the test needs finer ground.
 
@@ -600,7 +602,7 @@ Found while checking this version; none changes which pits are found or how they
 - **Chains that cross a tile or piece seam.** field_kit matches chain members to the county list by the run they came from. A member the county list kept from the neighboring run is labeled by its run rank (`r1`, in grey) as though it had been dropped, is not marked as part of the chain, and is left out of that chain's `--sheets C<n>` pages.
 - **`county_summary.txt`** has no per-tile column for the shallow layer; its first lines give the total.
 - **Field sheets** use a 60-m zoom whatever `--zoom-m` says.
-- **`--help` text** is out of date in places: county_scan's lists a `county_chains.kml` that is not written (the chains are a folder in `county_candidates.kml`) and says the summary includes failures and run times; field_kit's describes single-panel PNG close-ups with 1-m contours. This file describes what the programs do now.
+- **`--help` text** is out of date in places. county_scan's lists a `county_chains.kml` that is not written (the chains are a folder in `county_candidates.kml`) and says the summary includes failures and run times. field_kit's describes single-panel PNG close-ups with 1-m contours, lists fewer verdict words than it accepts, and says `--layers` picks the layers that get close-ups and waypoints (it filters everything). sink_scout's says `--chain-ratio` is kept below `--min-ratio` (true only under county_scan's 0.2) and leaves `dem.tif` out of `--save-rasters`. This file describes what the programs do now.
 
 ## Files in this repository
 

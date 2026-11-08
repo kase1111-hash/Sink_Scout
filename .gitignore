@@ -6,6 +6,7 @@ check_*/
 runs/
 *_out/
 *_1m/
+*_refine_*/
 selftest/
 ground_truth*.csv
 *PRIVATE*

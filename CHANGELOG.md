@@ -6,6 +6,7 @@ The programs carry no version numbers. Entries are dated by when the change reac
 
 - `README.md` rewritten as the full reference the book points to: every option of the three programs with its default, every file they write, the columns of each table, how the score is built, troubleshooting, and known issues.
 - Added this changelog, `CONTRIBUTING.md` (reporting problems and proposing changes without giving away locations), `CITATION.cff`, and an issue template that asks for no locations.
+- `.gitignore` also keeps out the `*_refine_*` folders that the commands in `refine_commands.txt` write to.
 
 ## 2026-11-08: latest version from the working session
 
