@@ -25,11 +25,16 @@ Outputs in --out:
     county_density_nocoords.png   pit density in 2-km cells, no coordinates or labels (publishable)
     county_summary.txt            per-tile counts, failures, run times
 
-Layers (each capped per tile):
-    pits        on a channel, no shallow/wide, creek or road flag            --top (default 50)
-    offchannel  pit-shaped but off any channel: shafts, cellars, arches       --top-offchannel (default 10)
-    bigwash     pit-shaped on a channel draining more than --max-catch-ha     --top-bigwash (default 10)
-    Ponds (shallow/wide) and road-flagged depressions are dropped.
+Layers (no per-tile limit by default; set one with the --top options if a county is too crowded):
+    pits        on a channel, no shallow/wide, creek or road flag            --top
+    offchannel  pit-shaped but off any channel: shafts, cellars, arches,      --top-offchannel
+                and, in claystone (Wasatch) hillsides, many real cave entrances
+    bigwash     pit-shaped on a channel draining more than --max-catch-ha     --top-bigwash
+    shallow     shallow/wide hollows, mostly ponds, a few caves (only with --keep-shallow)  --top-shallow
+    Road-flagged depressions are dropped; shallow/wide ones are dropped unless --keep-shallow.
+    (Checked Oct 2026 against one surveyor's list of 229 Mesa County caves: per-tile limits of 50/10/10
+    cut caves with a candidate within 100 m of an entrance from 124 to 91; keeping shallow hollows added
+    2,437 candidates for 8 more caves within 25 m.)
 
 KEEP THE OUTPUT PRIVATE. It is a map of cave locations. The density figure is the only one meant for print.
 """
@@ -45,6 +50,7 @@ import subprocess
 import sys
 import time
 
+LAYERS = ("pits", "offchannel", "bigwash", "shallow")
 TILE_RE = re.compile(r"x(\d+)y(\d+)_(.+?)\.tif$", re.IGNORECASE)
 BYTES_PER_CELL = 180          # measured peak memory of sink_scout per DEM cell
 SEC_PER_MCELL = 3.8           # measured on Kase's desktop: 25 M cells in ~95 s
@@ -210,10 +216,12 @@ def run_unit(unit, args, sink_scout_path, roads_path):
 
 # ----------------------------------------------------------------------------- merge
 
-def layer_of(p, max_catch_ac):
+def layer_of(p, max_catch_ac, keep_shallow=False):
     flags = p.get("flags") or ""
-    if "shallow/wide" in flags or "road" in flags:
+    if "road" in flags:
         return None
+    if "shallow/wide" in flags:
+        return "shallow" if keep_shallow else None
     if "off-channel" in flags:
         return "offchannel"
     if "creek" in flags:
@@ -225,7 +233,8 @@ def merge(units, args):
     from rasterio.warp import transform as rtransform
     from rasterio.crs import CRS
     wgs = CRS.from_epsg(4326)
-    caps = {"pits": args.top, "offchannel": args.top_offchannel, "bigwash": args.top_bigwash}
+    caps = {"pits": args.top, "offchannel": args.top_offchannel, "bigwash": args.top_bigwash,
+            "shallow": args.top_shallow}
     by_tile, chains, polys, per_tile = {}, [], {}, {}
     missing = 0
     for u in units:
@@ -252,7 +261,7 @@ def merge(units, args):
             if not (l <= p["x"] < r and b <= p["y"] < t):
                 continue
             st["in_core"] += 1
-            lay = layer_of(p, args.max_catch_ha * 2.471)
+            lay = layer_of(p, args.max_catch_ha * 2.471, args.keep_shallow)
             if lay is None:
                 continue
             q = dict(p)
@@ -314,14 +323,15 @@ def merge(units, args):
     kept = []
     for (tid, lay), lst in by_tile.items():
         lst.sort(key=lambda q: -q["score"])
-        kept += lst[:caps[lay]]
-        per_tile[tid][lay] = min(len(lst), caps[lay])
+        cap = caps[lay] if caps[lay] and caps[lay] > 0 else None       # 0 = no limit
+        kept += lst[:cap]
+        per_tile[tid][lay] = len(lst[:cap])
         per_tile[tid][lay + "_avail"] = len(lst)
     for lay in caps:
         sub = sorted((q for q in kept if q["layer"] == lay), key=lambda q: -q["score"])
         for i, q in enumerate(sub, 1):
             q["county_rank"] = i
-    kept.sort(key=lambda q: (["pits", "offchannel", "bigwash"].index(q["layer"]), q["county_rank"]))
+    kept.sort(key=lambda q: (LAYERS.index(q["layer"]), q["county_rank"]))
     write_county(kept, polys, chains, per_tile, missing, args)
     return kept, chains, per_tile, missing
 
@@ -353,10 +363,11 @@ def write_county(kept, polys, chains, per_tile, missing, args):
         r_, g_, b_ = 255, int(60 + 175 * t), int(40 * (1 - t))
         return f"ff{b_:02x}{g_:02x}{r_:02x}"
     titles = {"pits": "Pits on washes", "offchannel": "Off-channel pits (shafts, cellars, arches, alcoves)",
-              "bigwash": "Pits on big washes (creek flag)"}
+              "bigwash": "Pits on big washes (creek flag)",
+              "shallow": "Shallow, wide hollows (mostly ponds; a few caves)"}
     k = ['<?xml version="1.0" encoding="UTF-8"?>', '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>',
          '<name>sink_scout county scan</name>']
-    for lay in ("pits", "offchannel", "bigwash"):
+    for lay in LAYERS:
         sub = [q for q in kept if q["layer"] == lay]
         if not sub:
             continue
@@ -386,10 +397,10 @@ def write_county(kept, polys, chains, per_tile, missing, args):
     open(os.path.join(o, "county_candidates.kml"), "w").write("\n".join(k))
 
     with open(os.path.join(o, "county_summary.txt"), "w") as f:
-        n = {lay: sum(1 for q in kept if q["layer"] == lay) for lay in ("pits", "offchannel", "bigwash")}
+        n = {lay: sum(1 for q in kept if q["layer"] == lay) for lay in LAYERS}
         f.write(f"county scan: {len(per_tile)} tiles, {sum(v['pieces'] for v in per_tile.values())} runs "
                 f"({missing} not finished)\nkept: {n['pits']} pits, {n['offchannel']} off-channel, "
-                f"{n['bigwash']} big-wash, {len(chains)} chains; "
+                f"{n['bigwash']} big-wash, " + (f"{n['shallow']} shallow, " if n['shallow'] else "") + f"{len(chains)} chains; "
                 f"{getattr(args, '_n_dup', 0)} duplicates removed\n\n")
         f.write(f"{'tile':<16}{'runs':>6}{'raw':>7}{'inside':>8}{'pits':>12}{'offch':>10}{'bigwash':>10}\n")
         for tid in sorted(per_tile):
@@ -525,10 +536,13 @@ def main():
     p.add_argument("--max-catch-ha", type=float, default=300.0)
     p.add_argument("--osm-roads", action="store_true", help="fetch OSM roads once per tile and use them in every run")
     p.add_argument("--extra", help='extra sink_scout options, quoted, e.g. --extra "--min-depth 2"')
-    p.add_argument("--top", type=int, default=50, help="pits on washes kept per tile (default 50)")
-    p.add_argument("--top-offchannel", type=int, default=10)
-    p.add_argument("--top-bigwash", type=int, default=10)
-    p.add_argument("--only", help="comma-separated tile ids to run (e.g. x71y432,x72y431) - for a test")
+    p.add_argument("--top", type=int, default=0, help="pits on washes kept per tile (default 0 = all)")
+    p.add_argument("--top-offchannel", type=int, default=0, help="off-channel pits kept per tile (default 0 = all)")
+    p.add_argument("--top-bigwash", type=int, default=0, help="big-wash pits kept per tile (default 0 = all)")
+    p.add_argument("--keep-shallow", action="store_true",
+                   help="keep shallow/wide hollows as their own layer instead of dropping them (mostly ponds)")
+    p.add_argument("--top-shallow", type=int, default=0, help="shallow hollows kept per tile (default 0 = all)")
+    p.add_argument("--only", help="comma-separated tile ids to run (e.g. x70y433,x71y433) - for a test")
     p.add_argument("--dry-run", action="store_true", help="print the plan and estimates, run nothing")
     p.add_argument("--merge-only", action="store_true", help="skip the runs, rebuild the county files and maps")
     p.add_argument("--no-maps", action="store_true")
