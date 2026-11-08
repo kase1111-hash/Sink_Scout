@@ -8,6 +8,10 @@ Finds collapse-sinkhole candidates in bare-earth lidar: pits on drainages, linke
 
 Python 3.9 or newer, then:
 
+    pip install -r requirements.txt
+
+or, without the file:
+
     pip install numpy scipy scikit-image rasterio pyshp matplotlib
 
 Put `sink_scout.py`, `county_scan.py`, and `field_kit.py` in one folder and run them from there.
@@ -104,7 +108,7 @@ Notes on the options:
   - the floor-to-floor and rim-to-rim drop;
   - the grade.
   
-  These are a preliminary figure for the pipe underneath, never a surveyed one.
+  They measure wash between pits, not cave. Neither chain length nor sink size says much about how much cave is there; the walk decides.
 - `offchannel_pits.csv`: pit-shaped holes with no drainage into them, such as cellar holes, cisterns, prospects, mine shafts and lidar artifacts.
 - `overview.png`: hillshade, channels in blue, ranked candidates numbered.
 - `thumbs/`: a close-up of each top candidate.
@@ -114,6 +118,7 @@ Notes on the options:
 
     python county_scan.py tiles --out county --dry-run
     python county_scan.py tiles --out county --agg 1 --split 3 --osm-roads
+    python county_scan.py tiles --out county --agg 1 --split 3 --merge-only        # rebuild the lists only
 
 `--dry-run` prints the plan, the memory per run and the expected time, and runs nothing.
 
@@ -124,7 +129,9 @@ Notes on the options:
 - Runs are resumable. A finished piece is rerun automatically if its source tiles change (a neighbour added) or if `--agg` changes.
 - Across runs from different pieces, candidates less than 6 m apart are merged into one. This handles UTM-zone project overlap.
 
-**What is kept per tile:** the top 50 pits on washes, the top 10 off-channel holes, and the top 10 on creeks. Ponds and culvert dams are dropped. Road data is fetched once per tile.
+**What is kept:** every pit on a wash, every off-channel hole, and every pit on a creek, with no per-tile limit (set one with `--top`, `--top-offchannel`, `--top-bigwash` if a county is too crowded). Road-flagged depressions are dropped. Shallow, wide hollows are dropped unless `--keep-shallow`, which writes them as their own layer. Road data is fetched once per tile. To rebuild the county files from finished runs with different settings, add `--merge-only`.
+
+*Why no limits (Oct 2026):* checked against one surveyor's list of 229 Mesa County caves, the old limits (50 / 10 / 10 per tile) cut the caves with a candidate within 100 m of an entrance from 124 to 91, mostly small caves in Wasatch claystone that enter through pits on open slopes with no wash above them and so land in the off-channel layer. Keeping shallow hollows added 2,437 candidates for 8 more caves within 25 m, which is why it is optional. The score itself held up: a refit on the same caves did no better out of sample (AUC 0.63 against 0.72 for the current score).
 
 **Outputs:**
 - `county_candidates.kml` (three groups plus chains), with the same data as CSV and GeoJSON
@@ -144,6 +151,7 @@ It writes:
   - a 60-m zoom at full resolution, showing the hollow and its lip: whether it closes against a broad bank or a thin ridge, and how clean the rim is.
   
   Bare-earth models smooth boulders away; a talus pit shows as one hollow with many low spots.
+- **`field_candidates_web.kml`:** the same pins and lines without pictures. Google Earth on the web cannot show pictures packed inside a KMZ ("Only external images are currently supported"), and hosting the close-ups online would publish the locations. Use the .kmz in Google Earth Pro (desktop) for the pictures.
 - **A GPX file** of waypoints and chain tracks.
 - **Chain profiles:** the ground down the wash, the pit floors, and the ground above the line joining them. These show relative heights only, so they are publishable. Members are read from `county/runs/<piece>/candidates.geojson`; pits the county list dropped are labelled `r12` and drawn in grey.
 - **A field-sheets PDF:** one page per pit with the close-up, the numbers, the profile and a field checklist. It carries a PRIVATE banner.
@@ -167,3 +175,7 @@ Options:
 ## Repository rule
 
 Never commit run outputs: no `county/`, `field/` or run folders, and no `ground_truth*.csv`. They carry locations.
+
+## License
+
+CC0 1.0 Universal: dedicated to the public domain. Use, change, and share it freely; see `LICENSE`. The rule about locations above is a request, not a license term.

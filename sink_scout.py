@@ -57,7 +57,7 @@ OUTPUT  (in --out)
     candidates.geojson              EPSG:4326, points + footprints
     candidates.kml                  Google Earth placemarks + outlines
     chains.csv / .kml / .geojson    pit chains linked along one drainage: a line down the wash from
-                                    the top pit to the bottom pit with preliminary length and drop
+                                    the top pit to the bottom pit with the wash length and drop between them
     refine_commands.txt             after a coarse --agg sweep: one full-resolution --bbox command per
                                     chain and per top candidate (coarse cells find the fields and the
                                     long chains; 1-m cells are what separate small pits from ponds).
@@ -744,7 +744,7 @@ def trace_chains(cands, lab2, rec, dem, cell, transform, args):
     until it enters another eligible pit within --chain-dist meters of wash. Each pit therefore has at most one
     downstream neighbour; the links form trees, one per pipe system. For each tree the main stem is the longest
     upstream-to-root path: its along-wash length, straight distance, and floor-to-floor / rim-to-rim elevation
-    drop are the preliminary cave length and depth. Returns a list of chain dicts and fills chain_* on cands.
+    drop describe the wash between the pits, not the cave under it. Returns a list of chain dicts and fills chain_* on cands.
     Eligibility: ratio >= --chain-ratio, catchment <= --max-catch-ha, not within --road-buffer of a road."""
     for c in cands:
         c["chain_id"], c["chain_n"], c["chain_len_m"] = 0, 1, 0.0

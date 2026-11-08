@@ -11,6 +11,8 @@ It reads the candidate list and the same elevation tiles the scan used. Nothing 
 works on any finished run and can be run again whenever a verdict or a map layer is added.
 
 Outputs in --out:
+    field_candidates_web.kml   the same pins and lines without pictures, for Google Earth on the web, which
+                               cannot show pictures packed in a KMZ (use the .kmz in Google Earth Pro)
     field_candidates.kmz       Google Earth: every candidate with its lidar close-up in the balloon, colored by
                                verdict where one is known; chains with their profiles
     field_candidates.gpx       waypoints for a GPS or phone, and each chain as a track
@@ -98,7 +100,7 @@ def load_candidates(path):
             else:
                 continue
             polys[key] = g["coordinates"]
-    order = {"pits": 0, "offchannel": 1, "bigwash": 2}
+    order = {"pits": 0, "offchannel": 1, "bigwash": 2, "shallow": 3}
     cands.sort(key=lambda c: (order.get(c["layer"], 3), c["rank_key"]))
     return cands, polys
 
@@ -249,7 +251,7 @@ def hillshade(z, cell, az=315.0, alt=45.0):
 
 def save_closeup(path_noext, c, tiles, polys, cands, size_m, zoom_m, zfac):
     """Two panels: the ground around the pit, and a close zoom at full resolution where the texture of the floor
-    shows: boulders (a talus pit), straight ridges across the wash (fallen logs), a clean rim (a collapse).
+    shows the shape of the hollow and what closes it: a broad bank, a thin ridge across the wash, a clean collapse rim. (Boulders do not show; the bare-earth model smooths them.)
     Written as JPEG to keep a county's worth of them small; PNG if JPEG is not available."""
     import matplotlib.pyplot as plt
     from matplotlib.patches import Rectangle
@@ -260,7 +262,7 @@ def save_closeup(path_noext, c, tiles, polys, cands, size_m, zoom_m, zfac):
     a1.add_patch(Rectangle((-zoom_m / 2, -zoom_m / 2), zoom_m, zoom_m, fill=False, ec="yellow", lw=0.9))
     draw_closeup(a2, c, tiles, polys, cands, zoom_m, zfac, title=False, step=0.5, neighbors=False)
     a1.set_title(f"{size_m:.0f} m around (yellow box = zoom)", fontsize=7.5)
-    a2.set_title(f"{zoom_m:.0f} m zoom: boulders, logs, rims", fontsize=7.5)
+    a2.set_title(f"{zoom_m:.0f} m zoom: the hollow and its lip", fontsize=7.5)
     line2 = c.get("flags") or "no flags"
     if c.get("depth_open_ft") is not None and c["depth_ft"] - c["depth_open_ft"] >= 2:
         line2 += f"  |  {c['depth_open_ft']:.0f} ft without thin ridges"
@@ -536,7 +538,7 @@ def truth_report(cands, rows, out, match_m):
     L = []
     L.append(f"ground truth: {len(rows)} verdict(s); matched to a candidate within {match_m:g} m: "
              f"{sum(1 for r in rows if r['match'] is not None)}\n")
-    for lay in ("pits", "offchannel", "bigwash"):
+    for lay in ("pits", "offchannel", "bigwash", "shallow"):
         sub = [c for c in cands if c["layer"] == lay and c.get("verdict") and vclass(c["verdict"]) != "unknown"]
         if not sub:
             continue
@@ -631,10 +633,11 @@ def balloon(c, tag_names, closeup):
 
 
 def write_kmz(cands, chains, out, tag_names, closeups, profiles):
-    titles = {"pits": "Pits on washes", "offchannel": "Off-channel pits", "bigwash": "Pits on big washes"}
+    titles = {"pits": "Pits on washes", "offchannel": "Off-channel pits", "bigwash": "Pits on big washes",
+              "shallow": "Shallow, wide hollows"}
     k = ['<?xml version="1.0" encoding="UTF-8"?>', '<kml xmlns="http://www.opengis.net/kml/2.2"><Document>',
          "<name>sink_scout field kit</name>"]
-    for lay in ("pits", "offchannel", "bigwash"):
+    for lay in ("pits", "offchannel", "bigwash", "shallow"):
         sub = [c for c in cands if c["layer"] == lay]
         if not sub:
             continue
@@ -665,6 +668,14 @@ def write_kmz(cands, chains, out, tag_names, closeups, profiles):
             z.write(os.path.join(out, "closeups", name), f"closeups/{name}")
         for name in profiles.values():
             z.write(os.path.join(out, "profiles", name), f"profiles/{name}")
+    # Google Earth on the web (and in Chrome) will not show pictures packed inside a KMZ, only ones hosted
+    # online, and hosting the close-ups would publish the locations. So a second file without pictures:
+    # same pins, lines and measurements, with the picture's file name in place of the picture.
+    web = re.sub(r'<img src="(closeups|profiles)/([^"]+)"[^>]*/><br/>',
+                 r'<i>picture: \1/\2 in the field folder (Google Earth Pro shows it in the .kmz)</i><br/>',
+                 "\n".join(k))
+    with open(os.path.join(out, "field_candidates_web.kml"), "w", encoding="utf-8") as f:
+        f.write(web)
     return path
 
 

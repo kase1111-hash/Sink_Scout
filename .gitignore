@@ -1,0 +1,22 @@
+# Run outputs carry the locations of hollow ground. Never commit them.
+county/
+field/
+field_*/
+check_*/
+runs/
+*_out/
+*_1m/
+selftest/
+ground_truth*.csv
+*PRIVATE*
+*.kml
+*.kmz
+*.gpx
+# Elevation data
+tiles/
+*.tif
+*.tiff
+*.img
+# Python
+__pycache__/
+*.pyc
